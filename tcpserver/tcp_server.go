@@ -2,9 +2,8 @@ package tcpserver
 
 import (
 	"bufio"
-	"fmt"
-	"log"
 	"net"
+	"tcp_long_connection/logger"
 )
 
 // Client holds info about connection
@@ -21,11 +20,12 @@ type server struct {
 	joins                    chan net.Conn // Channel for new connections
 	onNewClientCallback      func(c *Client)
 	onClientConnectionClosed func(c *Client, err error)
-	onNewMessage             func(c *Client, message string)
+	onNewMessage             func(c *Client, p Package, message string)
 }
 
-// Read client data from channel
+// Read client data from channel string
 func (c *Client) listen() {
+	var p Package
 	reader := bufio.NewReader(c.conn)
 	for {
 		message, err := reader.ReadString('\n')
@@ -34,13 +34,30 @@ func (c *Client) listen() {
 			c.Server.onClientConnectionClosed(c, err)
 			return
 		}
-		c.Server.onNewMessage(c, message)
-		fmt.Println("message")
+		c.Server.onNewMessage(c, p, message)
 	}
 }
 
-func (c *Client) Send(message string) error {
-	_, err := c.conn.Write([]byte(message))
+//Read client data from channel byte
+func (c *Client) listenByte() {
+	reader := bufio.NewReader(c.conn)
+	for {
+		p, message, err := Decode(reader)
+		if err != nil {
+			c.conn.Close()
+			c.Server.onClientConnectionClosed(c, err)
+			return
+		}
+		c.Server.onNewMessage(c, p, message)
+	}
+}
+func (c *Client) Send(p Package, message string) error {
+	sndBuf, err := p.Encode(message)
+	if err != nil {
+		logger.Error(err.Error())
+		return err
+	}
+	_, err = c.conn.Write(sndBuf)
 	return err
 }
 
@@ -59,7 +76,7 @@ func (s *server) OnClientConnectionClosed(callback func(c *Client, err error)) {
 }
 
 // Called when Client receives new message
-func (s *server) OnNewMessage(callback func(c *Client, message string)) {
+func (s *server) OnNewMessage(callback func(c *Client, p Package, message string)) {
 	s.onNewMessage = callback
 }
 
@@ -69,7 +86,8 @@ func (s *server) newClient(conn net.Conn) {
 		conn:   conn,
 		Server: s,
 	}
-	go client.listen()
+	//go client.listen()
+	go client.listenByte()
 	s.onNewClientCallback(client)
 }
 
@@ -89,7 +107,7 @@ func (s *server) Listen() {
 
 	listener, err := net.Listen("tcp", s.address)
 	if err != nil {
-		log.Fatal("Error starting TCP server.")
+		logger.Error("Error starting TCP server.")
 	}
 	defer listener.Close()
 
@@ -101,14 +119,14 @@ func (s *server) Listen() {
 
 // Creates new tcp server instance
 func New(address string) *server {
-	log.Println("Creating server with address", address)
+	logger.Info("Creating server with address", address)
 	server := &server{
 		address: address,
 		joins:   make(chan net.Conn),
 	}
 
 	server.OnNewClient(func(c *Client) {})
-	server.OnNewMessage(func(c *Client, message string) {})
+	server.OnNewMessage(func(c *Client, p Package, message string) {})
 	server.OnClientConnectionClosed(func(c *Client, err error) {})
 
 	return server

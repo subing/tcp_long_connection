@@ -28,37 +28,38 @@ func newClientConnect(c *tcpserver.Client) {
 }
 
 //收到客户端消息回调函数
-func newMessageComing(c *tcpserver.Client, message string) {
+func newMessageComing(c *tcpserver.Client, p tcpserver.Package, message string) {
 	// new message receive
+	logger.Info("length := ", p.Length, " version := ", p.Version, " flag := ", p.Flag, " serial:= ", p.Serial)
 	logger.Info(message)
 	request := make(map[string]interface{})
 	err := json.Unmarshal([]byte(message), &request)
 	if err != nil {
 		logger.Error(err.Error())
-		c.Send("{\"status\":1,\"message\":\"param error,json format error\"}\n")
+		c.Send(p, "{\"status\":1,\"message\":\"param error,json format error\"}\n")
 		return
 	}
 	if request["cmd"] == nil || request["data"] == nil {
-		c.Send("{\"status\":1,\"message\":\"param error,no cmd or data\"}\n")
+		c.Send(p, "{\"status\":1,\"message\":\"param error,no cmd or data\"}\n")
 		return
 	}
 	cmd := ""
 	ok := false
 	if cmd, ok = request["cmd"].(string); !ok {
-		c.Send("{\"status\":1,\"message\":\"param error,cmd not string\"}\n")
+		c.Send(p, "{\"status\":1,\"message\":\"param error,cmd not string\"}\n")
 		return
 	}
 	dataMap := make(map[string]interface{})
 	if dataMap, ok = request["data"].(map[string]interface{}); !ok {
-		c.Send("{\"status\":1,\"message\":\"param error,data not map\"}\n")
+		c.Send(p, "{\"status\":1,\"message\":\"param error,data not map\"}\n")
 		return
 	}
 	res, err := logic.Router(cmd, dataMap)
 	if err != nil {
-		c.Send("{\"status\":1,\"message\":\"" + err.Error() + "\"}\n")
+		c.Send(p, "{\"status\":1,\"message\":\""+err.Error()+"\"}\n")
 		return
 	}
-	err = c.Send(res + "\n")
+	err = c.Send(p, res+"\n")
 	if err != nil {
 		logger.Error(err.Error())
 	}
