@@ -19,7 +19,7 @@ func (p *Package) SetPackage(version, flag, serial int) {
 	p.Flag = int32(flag)
 	p.Serial = int32(serial)
 }
-func (p *Package) GetPackage() Package {
+func (p *Package) GetHeader() Package {
 	return *p
 }
 func (p *Package) Encode(message string) ([]byte, error) {
